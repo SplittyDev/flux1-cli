@@ -22,14 +22,13 @@ def fix_flux_rope_transformer():
 
     _flux_rope = diffusers.models.transformers.transformer_flux.rope
 
-    def new_flux_rope(pos: torch.Tensor, dim: int, theta: int) -> torch.Tensor:
+    def patched_flux_rope(pos: torch.Tensor, dim: int, theta: int) -> torch.Tensor:
         assert dim % 2 == 0
         if pos.device.type == "mps":
             return _flux_rope(pos.to("cpu"), dim, theta).to(device=pos.device)
-        else:
-            return _flux_rope(pos, dim, theta)
+        return _flux_rope(pos, dim, theta)
 
-    diffusers.models.transformers.transformer_flux.rope = new_flux_rope
+    diffusers.models.transformers.transformer_flux.rope = patched_flux_rope
 
 
 class FluxConfig:
@@ -44,12 +43,14 @@ class FluxConfig:
         quality_iteration_count: int,
         fixed_guidance_scale: bool,
         default_guidance_scale: float,
+        max_sequence_length: int,
     ):
         self.model_name = model_name
         self.fast_iteration_count = fast_iteration_count
         self.quality_iteration_count = quality_iteration_count
         self.fixed_guidance_scale = fixed_guidance_scale
         self.default_guidance_scale = default_guidance_scale
+        self.max_sequence_length = max_sequence_length
 
 
 def get_best_device() -> torch.device:
@@ -80,6 +81,7 @@ def load_model_interactive() -> tuple[FluxPipeline, FluxConfig]:
         quality_iteration_count=30 if model == "FLUX.1-dev" else 4,
         fixed_guidance_scale=model == "FLUX.1-schnell",
         default_guidance_scale=3.5 if model == "FLUX.1-dev" else 0,
+        max_sequence_length=512 if model == "FLUX.1-dev" else 256,
     )
 
     # Detect device
@@ -220,7 +222,7 @@ class FluxProompter:
             height=self.hint_size[1],
             guidance_scale=self.config.default_guidance_scale,
             num_inference_steps=self.hint_inference_steps,
-            max_sequence_length=256,
+            max_sequence_length=self.config.max_sequence_length,
             generator=generator,
         )
 
