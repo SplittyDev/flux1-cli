@@ -1,0 +1,9 @@
+# Output images
+!output/.gitignore
+output/**/*
+
+# Downloaded models
+models/
+
+# Virtual environment
+.venv/
