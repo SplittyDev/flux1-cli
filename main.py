@@ -2,6 +2,7 @@
 
 import re
 import time
+import argparse
 from typing import Iterable
 from prompt_toolkit.completion.base import CompleteEvent
 from prompt_toolkit.document import Document
@@ -31,10 +32,30 @@ def fix_flux_rope_transformer():
     diffusers.models.transformers.transformer_flux.rope = patched_flux_rope
 
 
+class AppConfig:
+    """
+    Configuration for the application.
+    """
+
+    offload_cpu: bool
+    force_cpu: bool
+
+    def __init__(self, offload_cpu: bool, force_cpu: bool):
+        self.offload_cpu = offload_cpu
+        self.force_cpu = force_cpu
+
+
 class FluxConfig:
     """
     Configuration for model-specific inference and UI.
     """
+
+    model_name: str
+    fast_iteration_count: int
+    quality_iteration_count: int
+    fixed_guidance_scale: bool
+    default_guidance_scale: float
+    max_sequence_length: int
 
     def __init__(
         self,
@@ -53,24 +74,27 @@ class FluxConfig:
         self.max_sequence_length = max_sequence_length
 
 
-def get_best_device() -> torch.device:
+def get_best_device(force_cpu: bool = False) -> torch.device:
     """
     Attempt to find the fastest device for inference.
     """
 
-    if torch.cuda.is_available():
+    if not force_cpu and torch.cuda.is_available():
         device = torch.device("cuda")
         print("Using CUDA backend (GPU).")
-    elif torch.backends.mps.is_available():
+    elif not force_cpu and torch.backends.mps.is_available():
         device = torch.device("mps")
         print("Using MPS backend (GPU).")
     else:
         device = torch.device("cpu")
-        print("No GPU detected. Using CPU as fallback.")
+        if force_cpu:
+            print("Using CPU backend.")
+        else:
+            print("No GPU detected. Using CPU as fallback.")
     return device
 
 
-def load_model_interactive() -> tuple[FluxPipeline, FluxConfig]:
+def load_model_interactive(device: torch.device) -> tuple[FluxPipeline, FluxConfig]:
     # Show interactive model picker
     model = pick(["FLUX.1-schnell", "FLUX.1-dev"], title="Choose a model")[0]
 
@@ -84,11 +108,8 @@ def load_model_interactive() -> tuple[FluxPipeline, FluxConfig]:
         max_sequence_length=512 if model == "FLUX.1-dev" else 256,
     )
 
-    # Detect device
-    device = get_best_device()
-
     # Load inference pipeline
-    pipeline = FluxPipeline.from_pretrained(
+    pipeline: FluxPipeline = FluxPipeline.from_pretrained(
         f"black-forest-labs/{model}", torch_dtype=torch.bfloat16
     ).to(device)
 
@@ -234,10 +255,37 @@ class FluxProompter:
         self.last_prompt = user_prompt
 
 
+def parse_args() -> AppConfig:
+    parser = argparse.ArgumentParser(description="Run FLUX.1 models interactively.")
+    parser.add_argument("--offload-cpu", action="store_true", help="Use less VRAM.")
+    parser.add_argument("--force-cpu", action="store_true", help="Force CPU device.")
+    args = parser.parse_args()
+    return AppConfig(offload_cpu=args.offload_cpu, force_cpu=args.force_cpu)
+
+
 def main():
+    # Fix transformer for MPS
     fix_flux_rope_transformer()
-    pipeline, config = load_model_interactive()
-    FluxProompter(pipeline, config).run()
+
+    # Parse command line arguments
+    app_config = parse_args()
+
+    # This should be self-explanatory
+    device = get_best_device(force_cpu=app_config.force_cpu)
+
+    # Load model config and pipeline
+    pipeline, model_config = load_model_interactive(device=device)
+
+    # Offload to CPU if requested
+    if app_config.offload_cpu:
+        if device.type == "mps":
+            print("Error: Cannot offload to CPU when using MPS.")
+            exit(1)
+        else:
+            pipeline.enable_model_cpu_offload()
+
+    # Start inference loop
+    FluxProompter(pipeline, model_config).run()
 
 
 if __name__ == "__main__":

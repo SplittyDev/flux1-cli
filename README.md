@@ -85,6 +85,12 @@ The CLI supports various modifiers, which can be added to the end of the prompt:
 
 ## Troubleshooting
 
+**I don't have enough VRAM**:
+> You can pass the `--offload-cpu` flag to offload parts of the model to the CPU for lower VRAM usage with a small performance hit. Sadly this doesn't seem to work with MPS. If anyone knows why, please let me know!
+
+**I wanna use the CPU (for whatever reason)**:
+> You can pass the `--force-cpu` flag to force CPU inference. This is not recommended, as it's _much_ slower than MPS or CUDA.
+
 **High resolution images are broken**
 > FLUX.1 has a maximum resolution of 2MP. These are _roughly_ the largest possible sizes[^2]:
 > - 1:1 exact 1448 x 1448, rounded 1408 x 1408
