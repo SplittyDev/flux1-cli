@@ -262,7 +262,7 @@ class FluxProompter:
                     print(f"-> Using {num} inference steps.")
                     self.hint_inference_steps = num
             elif "x" in hint:
-                [w, h] = hint.split("x")
+                [w, h] = [s.strip() for s in hint.split("x")]
                 assert w.isdigit(), "The width has to be a number!"
                 assert h.isdigit(), "The height has to be a number!"
                 print(f"-> Using {w}x{h} resolution.")
