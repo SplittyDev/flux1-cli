@@ -252,7 +252,7 @@ class FluxProompter:
 
     def __parse_hints(self, user_prompt: str) -> str:
         hints = user_prompt.split("/")
-        for hint in hints[1:]:
+        for hint in [s.strip() for s in hints[1:]]:
             if hint.isdigit():
                 num = int(hint)
                 if num > 128:
