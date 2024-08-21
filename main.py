@@ -349,6 +349,7 @@ class FluxProompter:
         # Obtain final image and save it
         image = result.images[0]
         image.save(f"output/{date}/{int(time.time())}_{seed}.png")
+        image.save("output/latest.png")
 
         # Update last prompt
         self.last_prompt = user_prompt
