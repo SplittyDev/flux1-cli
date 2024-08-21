@@ -38,7 +38,7 @@ python3 main.py
 The CLI supports various modifiers, which can be added to the end of the prompt:
 
 | Modifier           | Description                                                |
-| ------------------ | ---------------------------------------------------------- |
+|--------------------|------------------------------------------------------------|
 | `/f`, `/fast`      | Use a small number of inference steps for fast results     |
 | `/s`, `/slow`      | Use a large number of inference steps for accurate results |
 | `/a`, `/again`     | Reuse the previous seed for the next inference             |
@@ -46,6 +46,7 @@ The CLI supports various modifiers, which can be added to the end of the prompt:
 | `/<n>` if n < 128  | Use this number of inference steps for the next inference  |
 | `/<n>` if n >= 128 | Set the resolution to `nxn`                                |
 | `/<w>x<h>`         | Set the resolution to `wxh`                                |
+| `/seed=<seed>`     | Set the seed to `seed`                                     |
 
 **Good to know**:
 

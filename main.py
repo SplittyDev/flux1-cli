@@ -165,6 +165,7 @@ class HintCompleter(Completer):
             "random",
             "s",
             "slow",
+            "seed=",
         ]
         if document.char_before_cursor == "/":
             for flag in flags:
@@ -236,6 +237,11 @@ class FluxProompter:
             elif hint == "r" or hint == "random":
                 print("-> Using random seed.")
                 self.hint_reuse_seed = False
+            elif hint.startswith("seed="):
+                seed = int(hint.split('=')[1])
+                print(f"-> Using seed {seed}.")
+                self.hint_reuse_seed = True
+                self.last_seed = seed
         return hints[0]
 
     def run(self):
