@@ -5,9 +5,10 @@
 
 ## Features
 
-- **All Models**: Supports FLUX.1-schnell and FLUX.1-dev
+- **Multiple Models**: Supports FLUX.1-schnell and FLUX.1-dev
+- **LoRA Support**: Interactive LoRA picker for easy selection
 - **Cross-Platform**: Supports MPS, CUDA and CPU
-- **Tested on macOS**: Works perfectly on macOS[^1]
+- **Tested on macOS**: Works well on Apple Silicon[^1]
 
 ## Installation
 
@@ -33,9 +34,21 @@ python3 -m pip install -r requirements.txt
 python3 main.py
 ```
 
+### Installing LoRAs
+
+Simply put your `.safetensors` files in the `lora` directory.  
+They will be available immediately when typing `/lora`.
+
 ## Prompting
 
-The CLI supports various modifiers, which can be added to the end of the prompt:
+### Inference Modifiers
+
+The CLI supports various modifiers, which can be added to the end of the prompt, like this:
+- `Photograph of a meadow in a forest /fast`
+- `Photograph of a meadow in a forest /1024x768 /slow`
+- `Photograph of a meadow in a forest /seed=1234 /8`
+
+**List of Modifiers**:
 
 | Modifier           | Description                                                |
 |--------------------|------------------------------------------------------------|
@@ -48,11 +61,23 @@ The CLI supports various modifiers, which can be added to the end of the prompt:
 | `/<w>x<h>`         | Set the resolution to `wxh`                                |
 | `/seed=<seed>`     | Set the seed to `seed`                                     |
 
-**Good to know**:
+### Standalone Modifiers
 
-- Simply pressing the <kbd>⏎</kbd> (return) key will repeat the last prompt
-- Typing only modifiers applies the modifiers and reuses the last prompt
-- Images are saved in the format `flux_<timestamp>_<seed>.png`
+The CLI also supports standalone modifiers, which only work on their own line.
+
+**List of Standalone Modifiers**:
+
+| Modifier | Description      |
+|----------|------------------|
+| `/quit`  | Quit the CLI     |
+| `/lora`  | Show LoRA picker |
+
+### Tips and Tricks
+
+- Leaving the prompt completely empty will repeat the last prompt
+- You can combine modifiers, like this: `Photograph of a meadow in a forest /fast /seed=1234`
+- You can apply new modifiers without repeating the prompt, like this: `/slow /1024x768`
+- Images are saved in this format: `output/<date>/<timestamp>_<seed>.png`
 
 ### Example workflows with modifiers
 

@@ -1,6 +1,7 @@
 # /usr/bin/env python3
 
 import re
+import os
 import time
 import argparse
 from typing import Iterable
@@ -104,12 +105,12 @@ def load_model_interactive(device: torch.device) -> tuple[FluxPipeline, FluxConf
             PickOption(
                 "FLUX.1-schnell (official)",
                 value="black-forest-labs/FLUX.1-schnell",
-                description="Official FLUX.1-schnell model by BlackForestLabs"
+                description="Official FLUX.1-schnell model by BlackForestLabs",
             ),
             PickOption(
                 "FLUX.1-dev (official)",
                 value="black-forest-labs/FLUX.1-dev",
-                description="Official FLUX.1-dev model by BlackForestLabs"
+                description="Official FLUX.1-dev model by BlackForestLabs",
             ),
         ],
         title="Choose a model",
@@ -146,6 +147,8 @@ def load_model_interactive(device: torch.device) -> tuple[FluxPipeline, FluxConf
     pipeline: FluxPipeline = FluxPipeline.from_pretrained(
         model_repo, torch_dtype=config.torch_dtype
     )
+
+    # Move pipeline to device
     pipeline.to(device)
 
     return (pipeline, config)
@@ -155,25 +158,37 @@ class HintCompleter(Completer):
     def get_completions(
         self, document: Document, complete_event: CompleteEvent
     ) -> Iterable[Completion]:
-        flags = [
+        suffix_flags = [
             "a",
             "again",
             "f",
             "fast",
-            "quit",
             "r",
             "random",
             "s",
             "slow",
             "seed=",
         ]
+        standalone_flags = [
+            "quit",
+            "seed=",
+            "lora",
+        ]
         if document.char_before_cursor == "/":
-            for flag in flags:
+            if document.cursor_position_col == 1:
+                for flag in standalone_flags:
+                    yield Completion(flag, start_position=-1 * len(flag))
+            for flag in suffix_flags:
                 yield Completion(flag, start_position=-1 * len(flag))
         else:
             matches = re.match(r".*?/([a-z0-9]+)$", document.text_before_cursor)
             if matches:
-                for flag in flags:
+                if document.text.strip().startswith("/"):
+                    for flag in standalone_flags:
+                        if flag.startswith(matches.group(1)):
+                            full_flag = f"/{flag}"
+                            yield Completion(flag, start_position=-1 * len(full_flag))
+                for flag in suffix_flags:
                     if flag.startswith(matches.group(1)):
                         full_flag = f"/{flag}"
                         yield Completion(full_flag, start_position=-1 * len(full_flag))
@@ -182,9 +197,9 @@ class HintCompleter(Completer):
 class FluxProompter:
     last_prompt: str
     last_seed: int
+    fixed_seed: int | None
     hint_size: tuple[int, int]
     hint_inference_steps: int
-    hint_reuse_seed: bool
     generator: torch.Generator
     pipeline: FluxPipeline
     config: FluxConfig
@@ -194,9 +209,9 @@ class FluxProompter:
     def __init__(self, pipeline: FluxPipeline, config: FluxConfig):
         self.last_prompt = ""
         self.last_seed = 0
+        self.fixed_seed = None
         self.hint_size = (512, 512)
         self.hint_inference_steps = 4
-        self.hint_reuse_seed = False
         self.generator = torch.Generator("cpu")
         self.pipeline = pipeline
         self.config = config
@@ -204,9 +219,36 @@ class FluxProompter:
         self.completions = HintCompleter()
 
     def __bottom_toolbar(self):
-        return HTML(
-            f"<b>{self.config.model_name}</b> | Steps: {self.hint_inference_steps} | Size: {self.hint_size[0]}x{self.hint_size[1]} | Last Seed: {self.last_seed}"
+        items: list[str] = []
+        model_name = f"<b>{self.config.model_name}</b>"
+        step_count = f"Steps: {self.hint_inference_steps}"
+        resolution = f"Resolution: {self.hint_size[0]}x{self.hint_size[1]}"
+        items.append(model_name)
+        items.append(step_count)
+        items.append(resolution)
+        if self.fixed_seed is None:
+            items.append("Seed: Random")
+            items.append(f"Last Seed: {self.last_seed}")
+        else:
+            items.append(f"Seed: Fixed ({self.fixed_seed})")
+        item_code = " | ".join(items)
+        return HTML(item_code)
+
+    def __show_lora_picker(self):
+        available_loras = [f for f in os.listdir("lora/") if f.endswith(".safetensors")]
+        if len(available_loras) == 0:
+            print(
+                "No LORAs found. Place the .safetensors files in the lora/ directory."
+            )
+            return
+        selected_loras = pick(
+            available_loras, title="Choose LoRA weights to load", multiselect=True
         )
+        self.pipeline.unload_lora_weights()
+        for path, _ in selected_loras:
+            filename = os.path.basename(path)
+            self.pipeline.load_lora_weights(f"./lora/{filename}")
+            print(f"-> Loaded LoRA: {filename}")
 
     def __parse_hints(self, user_prompt: str) -> str:
         hints = user_prompt.split("/")
@@ -232,16 +274,15 @@ class FluxProompter:
                 print("-> Using high quality generation.")
                 self.hint_inference_steps = self.config.quality_iteration_count
             elif hint == "a" or hint == "again" or hint == "=":
-                print(f"-> Reusing last seed ({self.last_seed}).")
-                self.hint_reuse_seed = True
+                print(f"-> Using fixed seed ({self.last_seed}).")
+                self.fixed_seed = self.last_seed
             elif hint == "r" or hint == "random":
                 print("-> Using random seed.")
-                self.hint_reuse_seed = False
+                self.fixed_seed = None
             elif hint.startswith("seed="):
-                seed = int(hint.split('=')[1])
-                print(f"-> Using seed {seed}.")
-                self.hint_reuse_seed = True
-                self.last_seed = seed
+                seed = int(hint.split("=")[1])
+                print(f"-> Using fixed seed ({seed}).")
+                self.fixed_seed = seed
         return hints[0]
 
     def run(self):
@@ -257,23 +298,36 @@ class FluxProompter:
             completer=self.completions,
             bottom_toolbar=self.__bottom_toolbar,
         ).strip()
+        prompt_started_with_hint = user_prompt.startswith("/")
 
-        # Check for quitters
-        if user_prompt == "/quit":
-            exit(0)
+        # Check standalone hints
+        match user_prompt:
+            case "/quit":
+                exit(0)
+            case "/lora":
+                self.__show_lora_picker()
+                return
+            case hint if re.match(r"/seed\s*=\s*\d+", hint) is not None:
+                seed = int(hint.split("=")[1].strip())
+                self.fixed_seed = seed
+                print(f"-> Using fixed seed ({seed}).")
+                return
 
-        # Parse hints and get final prompt with hints removed
+        # Parse suffix hints and get final prompt with hints removed
         user_prompt = self.__parse_hints(user_prompt)
+
+        # Do not run inference on prompts that start with a hint,
+        # unless there is a cached prompt to reuse.
+        if prompt_started_with_hint and self.last_prompt.strip() == "":
+            return
 
         # Reuse last prompt if we're left with nothing
         if user_prompt.strip() == "":
-            print(f"Reusing last prompt: {self.last_prompt}")
+            print(f"-> Reusing last prompt ({self.last_prompt})")
             user_prompt = self.last_prompt
 
         # Seed shenanigans
-        if self.hint_reuse_seed:
-            print(f"Reusing last seed: {self.last_seed}")
-        seed = self.generator.seed() if not self.hint_reuse_seed else self.last_seed
+        seed = self.generator.seed() if self.fixed_seed is None else self.fixed_seed
         generator = self.generator.manual_seed(seed)
         self.last_seed = seed
 
@@ -288,9 +342,13 @@ class FluxProompter:
             generator=generator,
         )
 
+        # Create folder for current date
+        date = time.strftime("%Y-%m-%d")
+        os.makedirs(f"output/{date}", exist_ok=True)
+
         # Obtain final image and save it
         image = result.images[0]
-        image.save(f"output/flux_{time.time()}_{seed}.png")
+        image.save(f"output/{date}/{int(time.time())}_{seed}.png")
 
         # Update last prompt
         self.last_prompt = user_prompt

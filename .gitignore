@@ -1,9 +1,14 @@
 # Output images
-!output/.gitignore
 output/**/*
+!output/.gitkeep
 
 # Downloaded models
-models/
+models/**/*
+!models/.gitkeep
+
+# Downloaded LoRAs
+lora/**/*
+!lora/.gitkeep
 
 # Virtual environment
 .venv/
