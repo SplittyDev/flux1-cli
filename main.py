@@ -12,7 +12,7 @@ from diffusers import FluxPipeline
 from prompt_toolkit import PromptSession
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.completion import Completer, Completion
-from pick import pick
+from pick import pick, Option as PickOption
 
 
 def fix_flux_rope_transformer():
@@ -56,6 +56,7 @@ class FluxConfig:
     fixed_guidance_scale: bool
     default_guidance_scale: float
     max_sequence_length: int
+    torch_dtype: torch.dtype
 
     def __init__(
         self,
@@ -65,6 +66,7 @@ class FluxConfig:
         fixed_guidance_scale: bool,
         default_guidance_scale: float,
         max_sequence_length: int,
+        torch_dtype: torch.dtype,
     ):
         self.model_name = model_name
         self.fast_iteration_count = fast_iteration_count
@@ -72,6 +74,7 @@ class FluxConfig:
         self.fixed_guidance_scale = fixed_guidance_scale
         self.default_guidance_scale = default_guidance_scale
         self.max_sequence_length = max_sequence_length
+        self.torch_dtype = torch_dtype
 
 
 def get_best_device(force_cpu: bool = False) -> torch.device:
@@ -96,22 +99,54 @@ def get_best_device(force_cpu: bool = False) -> torch.device:
 
 def load_model_interactive(device: torch.device) -> tuple[FluxPipeline, FluxConfig]:
     # Show interactive model picker
-    model = pick(["FLUX.1-schnell", "FLUX.1-dev"], title="Choose a model")[0]
+    model_option = pick(
+        [
+            PickOption(
+                "FLUX.1-schnell (official)",
+                value="black-forest-labs/FLUX.1-schnell",
+                description="Official FLUX.1-schnell model by BlackForestLabs"
+            ),
+            PickOption(
+                "FLUX.1-dev (official)",
+                value="black-forest-labs/FLUX.1-dev",
+                description="Official FLUX.1-dev model by BlackForestLabs"
+            ),
+        ],
+        title="Choose a model",
+    )[0]
+
+    model_repo = model_option.value
+    model_name = model_option.value.split("/")[1]
 
     # Instantiate model-specific configuration
-    config = FluxConfig(
-        model_name=model,
-        fast_iteration_count=5 if model == "FLUX.1-dev" else 1,
-        quality_iteration_count=30 if model == "FLUX.1-dev" else 4,
-        fixed_guidance_scale=model == "FLUX.1-schnell",
-        default_guidance_scale=3.5 if model == "FLUX.1-dev" else 0,
-        max_sequence_length=512 if model == "FLUX.1-dev" else 256,
-    )
+    config: FluxConfig
+    match model_name:
+        case "FLUX.1-schnell":
+            config = FluxConfig(
+                model_name=model_name,
+                fast_iteration_count=1,
+                quality_iteration_count=4,
+                fixed_guidance_scale=True,
+                default_guidance_scale=0,
+                max_sequence_length=256,
+                torch_dtype=torch.bfloat16,
+            )
+        case "FLUX.1-dev":
+            config = FluxConfig(
+                model_name=model_name,
+                fast_iteration_count=5,
+                quality_iteration_count=28,
+                fixed_guidance_scale=False,
+                default_guidance_scale=3.5,
+                max_sequence_length=512,
+                torch_dtype=torch.bfloat16,
+            )
 
     # Load inference pipeline
     pipeline: FluxPipeline = FluxPipeline.from_pretrained(
-        f"black-forest-labs/{model}", torch_dtype=torch.bfloat16
-    ).to(device)
+        model_repo, torch_dtype=config.torch_dtype
+    )
+    pipeline.to(device)
 
     return (pipeline, config)
 
