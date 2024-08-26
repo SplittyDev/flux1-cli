@@ -167,12 +167,12 @@ class HintCompleter(Completer):
             "random",
             "s",
             "slow",
-            "seed=",
         ]
         standalone_flags = [
             "quit",
             "seed=",
             "lora",
+            "lora_scale="
         ]
         if document.char_before_cursor == "/":
             if document.cursor_position_col == 1:
@@ -200,6 +200,7 @@ class FluxProompter:
     fixed_seed: int | None
     hint_size: tuple[int, int]
     hint_inference_steps: int
+    lora_scale: float
     generator: torch.Generator
     pipeline: FluxPipeline
     config: FluxConfig
@@ -212,6 +213,7 @@ class FluxProompter:
         self.fixed_seed = None
         self.hint_size = (512, 512)
         self.hint_inference_steps = 4
+        self.lora_scale = 0.5
         self.generator = torch.Generator("cpu")
         self.pipeline = pipeline
         self.config = config
@@ -307,6 +309,11 @@ class FluxProompter:
             case "/lora":
                 self.__show_lora_picker()
                 return
+            case hint if re.match(r"/lora_scale\s*=\s*(\d+(?:\.\d+)?)", hint) is not None:
+                scale = float(hint.split("=")[1].strip())
+                self.lora_scale = scale
+                print(f"-> Set LoRA scale to {scale}.")
+                return
             case hint if re.match(r"/seed\s*=\s*\d+", hint) is not None:
                 seed = int(hint.split("=")[1].strip())
                 self.fixed_seed = seed
@@ -340,6 +347,9 @@ class FluxProompter:
             num_inference_steps=self.hint_inference_steps,
             max_sequence_length=self.config.max_sequence_length,
             generator=generator,
+            joint_attention_kwargs={
+                "scale": self.lora_scale
+            }
         )
 
         # Create folder for current date

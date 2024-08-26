@@ -12,3 +12,6 @@ lora/**/*
 
 # Virtual environment
 .venv/
+
+# macOS
+.DS_Store
