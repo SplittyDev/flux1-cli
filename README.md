@@ -22,7 +22,7 @@ cd flux1-cli
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip sync requirements.txt
+uv pip install -r requirements.txt
 python3 main.py
 ```
 
