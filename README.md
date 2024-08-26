@@ -59,7 +59,6 @@ The CLI supports various modifiers, which can be added to the end of the prompt,
 | `/<n>` if n < 128  | Use this number of inference steps for the next inference  |
 | `/<n>` if n >= 128 | Set the resolution to `nxn`                                |
 | `/<w>x<h>`         | Set the resolution to `wxh`                                |
-| `/seed=<seed>`     | Set the seed to `seed`                                     |
 
 ### Standalone Modifiers
 
@@ -67,10 +66,12 @@ The CLI also supports standalone modifiers, which only work on their own line.
 
 **List of Standalone Modifiers**:
 
-| Modifier | Description      |
-|----------|------------------|
-| `/quit`  | Quit the CLI     |
-| `/lora`  | Show LoRA picker |
+| Modifier              | Description                   |
+|-----------------------|-------------------------------|
+| `/quit`               | Quit the CLI                  |
+| `/lora`               | Show LoRA picker              |
+| `/lora_scale=<scale>` | Set the LoRA scale to `scale` |
+| `/seed=<seed>`        | Set the seed to `seed`        |
 
 ### Tips and Tricks
 
