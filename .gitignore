@@ -10,6 +10,9 @@ models/**/*
 lora/**/*
 !lora/.gitkeep
 
+# Pycache
+__pycache__/
+
 # Virtual environment
 .venv/
 
